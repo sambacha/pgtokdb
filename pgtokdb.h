@@ -2,7 +2,7 @@
 #define PGTOKDB_H
 
 #include <postgres.h>
-#include <catalog/pg_type_d.h>
+#include <catalog/pg_type.h>
 #include <utils/timestamp.h>
 #include <utils/builtins.h>
 #include <utils/uuid.h>
@@ -26,6 +26,12 @@ CppConcat(pg_finfo_,funcname) (void) \
 } \
 extern int no_such_variable
 
+typedef struct pgentry
+{
+	Datum dval;
+	bool isNull;
+} PGEntry;
+
 K p2k_bool(Datum);
 K p2k_uuid(Datum);
 K p2k_int2(Datum);
@@ -39,22 +45,22 @@ K p2k_timestamp(Datum);
 K p2k_date(Datum);
 K p2k_bytea(Datum);
 
-Datum k2p_bool(K, int, char *);
-Datum k2p_uuid(K, int, char *);
-Datum k2p_int2(K, int, char *);
-Datum k2p_int4(K, int, char *);
-Datum k2p_int8(K, int, char *);
-Datum k2p_float4(K, int, char *);
-Datum k2p_float8(K, int, char *);
-Datum k2p_char(K, int, char *);
-Datum k2p_varchar(K, int, char *);
-Datum k2p_timestamp(K, int, char *);
-Datum k2p_date(K, int, char *);
-Datum k2p_bytea(K, int, char *);
-Datum k2p_int2array(K, int, char *);
-Datum k2p_int4array(K, int, char *);
-Datum k2p_int8array(K, int, char *);
-Datum k2p_float4array(K, int, char *);
-Datum k2p_float8array(K, int, char *);
+PGEntry k2p_bool(K, int, char *);
+PGEntry k2p_uuid(K, int, char *);
+PGEntry k2p_int2(K, int, char *);
+PGEntry k2p_int4(K, int, char *);
+PGEntry k2p_int8(K, int, char *);
+PGEntry k2p_float4(K, int, char *);
+PGEntry k2p_float8(K, int, char *);
+PGEntry k2p_char(K, int, char *);
+PGEntry k2p_varchar(K, int, char *);
+PGEntry k2p_timestamp(K, int, char *);
+PGEntry k2p_date(K, int, char *);
+PGEntry k2p_bytea(K, int, char *);
+PGEntry k2p_int2array(K, int, char *);
+PGEntry k2p_int4array(K, int, char *);
+// Datum k2p_int8array(K, int, char *);
+PGEntry k2p_float4array(K, int, char *);
+// Datum k2p_float8array(K, int, char *);
 
 #endif /* PKGTOKDB_H */

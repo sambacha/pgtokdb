@@ -26,7 +26,7 @@ double	_k2p_float8(K, int, char *);
 uint8	_k2p_char(K, int, char *);
 int64	_k2p_timestamp(K, int, char *);
 int32	_k2p_date(K, int, char *);
-Datum 	_k2p_array(K, int, signed char, char *, char *);
+PGEntry _k2p_array(K, int, signed char, char *, char *);
 
 
 K p2k_bool(Datum x)
@@ -97,9 +97,13 @@ K p2k_bytea(Datum x)
 
 static const char *k2p_msg = "Unable to convert kdb+ column '%s' to %s";
 
-Datum k2p_bool(K c, int i, char *n)
+PGEntry k2p_bool(K c, int i, char *n)
 {
-	return BoolGetDatum(_k2p_bool(c, i, n));
+	PGEntry res;
+	int dval = _k2p_bool(c, i, n);
+	res.isNull = 0; /* No boolean nulls */
+	res.dval = DatumGetBool(dval);
+	return res;
 }
 
 int _k2p_bool(K c, int i, char *n)
@@ -111,22 +115,30 @@ int _k2p_bool(K c, int i, char *n)
 	}
 }
 
-Datum k2p_uuid(K c, int i, char *n)
+PGEntry k2p_uuid(K c, int i, char *n)
 {
+	PGEntry res;
 	if (c->t == UU)
 	{	
 		/* A UUID is 16 bytes; we need allocate space to the result from kdb+ */
 		pg_uuid_t *retval = palloc(sizeof(pg_uuid_t));
 		Assert(sizeof(pg_uuid_t) == sizeof(U));
 		*retval = *(pg_uuid_t *) &kU(c)[i]; 
-		return PointerGetDatum(retval);
+		res.dval = PointerGetDatum(retval);
+		U nu = {0};
+		if (ku(kU(c)[i]) == ku(nu)) {res.isNull = 1;} else {res.isNull = 0;}
+		return res;
 	}
 	elog(ERROR, k2p_msg, n, "UUID");
 }
 
-Datum k2p_int2(K c, int i, char *n)
+PGEntry k2p_int2(K c, int i, char *n)
 {
-	return Int16GetDatum(_k2p_int2(c, i, n));
+	PGEntry res;
+	int16 dval = _k2p_int2(c, i, n);
+	if (dval == ni) {res.isNull = 1;} else {res.isNull = 0;}
+	res.dval = Int16GetDatum(dval);
+	return res;
 }
 
 int16 _k2p_int2(K c, int i, char *n)
@@ -140,9 +152,13 @@ int16 _k2p_int2(K c, int i, char *n)
 	}
 }
 
-Datum k2p_int4(K c, int i, char *n)
+PGEntry k2p_int4(K c, int i, char *n)
 {
-	return Int32GetDatum(_k2p_int4(c, i, n));
+	PGEntry res;
+	int32 dval = _k2p_int4(c, i, n);
+	if (dval == ni) {res.isNull = 1;} else {res.isNull = 0;}
+	res.dval = Int32GetDatum(dval);
+	return res;
 }
 
 int32 _k2p_int4(K c, int i, char *n)
@@ -157,9 +173,13 @@ int32 _k2p_int4(K c, int i, char *n)
 	}
 }
 
-Datum k2p_int8(K c, int i, char *n)
+PGEntry k2p_int8(K c, int i, char *n)
 {
-	return Int64GetDatum(_k2p_int8(c, i, n));
+	PGEntry res;
+	int64 dval = _k2p_int8(c, i, n);
+	if (dval == nj || dval == ni) {res.isNull = 1;} else {res.isNull = 0;}
+	res.dval = Int64GetDatum(dval);
+	return res;
 }
 
 int64 _k2p_int8(K c, int i, char *n)
@@ -175,9 +195,13 @@ int64 _k2p_int8(K c, int i, char *n)
 	}
 }
 
-Datum k2p_float4(K c, int i, char *n)
+PGEntry k2p_float4(K c, int i, char *n)
 {
-	return Float4GetDatum(_k2p_float4(c, i, n));
+	PGEntry res;
+	float dval = _k2p_float4(c, i, n); 
+	if (dval == nf) {res.isNull = 1;} else {res.isNull = 0;}
+	res.dval = Float4GetDatum(dval);
+	return res;
 }
 
 float _k2p_float4(K c, int i, char *n)
@@ -193,9 +217,13 @@ float _k2p_float4(K c, int i, char *n)
 	}
 }
 
-Datum k2p_float8(K c, int i, char *n)
+PGEntry k2p_float8(K c, int i, char *n)
 {
-	return Float8GetDatum(_k2p_float8(c, i, n));
+	PGEntry res;
+	double dval = _k2p_float8(c, i, n);
+	if (dval == nf) {res.isNull = 1;} else {res.isNull = 0;}
+	res.dval = Float8GetDatum(dval);
+	return res;
 }
 
 double _k2p_float8(K c, int i, char *n)
@@ -212,8 +240,9 @@ double _k2p_float8(K c, int i, char *n)
 }
 
 //! cleanup
-Datum k2p_varchar(K c, int i, char *n)
+PGEntry k2p_varchar(K c, int i, char *n)
 {
+	PGEntry res;
 	if (c->t == 0) /* If a list */
 	{
 		K p = kK(c)[i];
@@ -221,31 +250,40 @@ Datum k2p_varchar(K c, int i, char *n)
 		{
 			char *s = (char *) kC(p);
 			int l = p->n;
-			return (Datum) cstring_to_text_with_len(s, l);
+			if (l == 0) {res.isNull = 1;} else {res.isNull = 0;}
+			res.dval = (Datum) cstring_to_text_with_len(s, l);
+			return res;
 		} 
 		/* Falling through to error at end */
 	} 
 	else if (c->t == KC) 
 	{
 		char x = kC(c)[i];
-		return (Datum) cstring_to_text_with_len(&x, 1);
+		if (kc(kC(c)[i]) == kc(" ")) {res.isNull = 1;} else {res.isNull = 0;}
+		res.dval = (Datum) cstring_to_text_with_len(&x, 1);
+		return res;
 	} 
 	else if (c->t == KS)
 	{
-		return (Datum) cstring_to_text(kS(c)[i]);
+		if (ks(kS(c)[i]) == ks("")) {res.isNull = 1;} else {res.isNull = 0;}
+		res.dval =  (Datum) cstring_to_text(kS(c)[i]);
+		return res;
 	}
-
 	elog(ERROR, k2p_msg, n, "varchar");
 }
 
-Datum k2p_char(K c, int i, char *n)
+PGEntry k2p_char(K c, int i, char *n)
 {
 	return k2p_varchar(c, i, n);
 }
 
-Datum k2p_timestamp(K c, int i, char *n)
+PGEntry k2p_timestamp(K c, int i, char *n)
 {
-	return TimestampGetDatum(_k2p_timestamp(c, i, n));
+	PGEntry res;
+	int64 dval = _k2p_timestamp(c, i, n);
+	if (dval == nj) {res.isNull = 1;} else {res.isNull = 0;}
+	res.dval = TimestampGetDatum(dval);
+	return res;
 }
 
 int64 _k2p_timestamp(K c, int i, char *n)
@@ -257,9 +295,13 @@ int64 _k2p_timestamp(K c, int i, char *n)
 	}
 }
 
-Datum k2p_date(K c, int i, char *n)
+PGEntry k2p_date(K c, int i, char *n)
 {
-	return Int32GetDatum(_k2p_date(c, i, n));
+	PGEntry res;
+	int32 dval = _k2p_date(c, i, n);
+	if (dval == ni) {res.isNull = 1;} else {res.isNull = 0;}
+	res.dval = Int32GetDatum(dval);
+	return res;
 }
 
 int32 _k2p_date(K c, int i, char *n)
@@ -271,8 +313,9 @@ int32 _k2p_date(K c, int i, char *n)
 	}
 }
 
-Datum k2p_bytea(K c, int i, char *n)
+PGEntry k2p_bytea(K c, int i, char *n)
 {
+	PGEntry res;
 	if (c->t == 0) /* If a list */
 	{
 		K p = kK(c)[i];
@@ -284,41 +327,43 @@ Datum k2p_bytea(K c, int i, char *n)
 			bytea *datum = (bytea *) palloc(datumlen);
 			SET_VARSIZE(datum, datumlen);
 			memcpy(VARDATA(datum), bytes, l);
-			return PointerGetDatum(datum);
+			res.dval = PointerGetDatum(datum);
+			res.isNull = 0;
+			return res;
 		}
 	}
 	elog(ERROR, k2p_msg, n, "bytea");
 }
 
 /* Convert a kdb+ short list (H), to an smallint[] array in Postgres */
-Datum k2p_int2array(K c, int i, char *n)
+PGEntry k2p_int2array(K c, int i, char *n)
 {
 	return _k2p_array(c, i, KH, n, "smallint[]");
 }
 
 /* Convert a kdb+ int list (I), to an integer[] array in Postgres */
-Datum k2p_int4array(K c, int i, char *n)
+PGEntry k2p_int4array(K c, int i, char *n)
 {
 	return _k2p_array(c, i, KI, n, "integer[]");
 }
 
-/* Convert a kdb+ long list (J), to an bigint[] array in Postgres */
-Datum k2p_int8array(K c, int i, char *n)
-{
-	return _k2p_array(c, i, KJ, n, "bigint[]");
-}
+// /* Convert a kdb+ long list (J), to an bigint[] array in Postgres */
+// PGEntry k2p_int8array(K c, int i, char *n)
+// {
+// 	return _k2p_array(c, i, KJ, n, "bigint[]");
+// }
 
 /* Convert a kdb+ real list (E), to an real[] array in Postgres */
-Datum k2p_float4array(K c, int i, char *n)
+PGEntry k2p_float4array(K c, int i, char *n)
 {
 	return _k2p_array(c, i, KE, n, "real[]");
 }
 
-/* Convert a kdb+ float list (F), to an double precision[] array in Postgres */
-Datum k2p_float8array(K c, int i, char *n)
-{
-	return _k2p_array(c, i, KF, n, "double precision[]");
-}
+// /* Convert a kdb+ float list (F), to an double precision[] array in Postgres */
+// PGEntry k2p_float8array(K c, int i, char *n)
+// {
+// 	return _k2p_array(c, i, KF, n, "double precision[]");
+// }
 
 /*
  * Convert row of a table column (containing lists) to a Postgres array. 
@@ -329,8 +374,10 @@ Datum k2p_float8array(K c, int i, char *n)
  * kname  - Name of kdb+ column for error reporting
  * pgtype - Postgres data type name for error reporting
  */
-Datum _k2p_array(K klol, int krow, signed char ktype, char *kname, char *pgtype) 
+PGEntry _k2p_array(K klol, int krow, signed char ktype, char *kname, char *pgtype) 
 {
+	PGEntry res;
+
 	Oid 	elmtype;
 	int 	elmlen;
 	char 	elmalign;
@@ -344,6 +391,7 @@ Datum _k2p_array(K klol, int krow, signed char ktype, char *kname, char *pgtype)
 		elog(ERROR, k2p_msg, kname, pgtype);
 
 	int arrlen = list->n;  /* Number of elements */
+	if (arrlen == 0) {res.isNull = 1;} else {res.isNull = 0;}
 	Datum *data = (Datum *) palloc0(arrlen * sizeof(Datum));
 
 	switch (list->t)
@@ -384,5 +432,6 @@ Datum _k2p_array(K klol, int krow, signed char ktype, char *kname, char *pgtype)
 
 	ArrayType *array = construct_array(data, arrlen, elmtype, elmlen, true, elmalign);
 	pfree(data);
-	return PointerGetDatum(array);
+	res.dval = PointerGetDatum(array);
+	return res;
 }

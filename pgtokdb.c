@@ -53,10 +53,10 @@ typedef struct
 struct
 {
 	int     typeoid;				/* OID of Postgres type */
-	Datum   (*k2p)(K, int, char *);	/* Function to convert kdb+ to Postgres */
+	PGEntry   (*k2p)(K, int, char *);	/* Function to convert kdb+ to Postgres */
 	K		(*p2k)(Datum); 			/* Function to convert Postgres to kdb+ */
 	bool    isref;					/* Indicates whether Postgres Datum is a reference */
-} todt[19] =
+} todt[17] =
 {
 	{ BOOLOID,			k2p_bool,     		p2k_bool,		false },
 	{ INT2OID,			k2p_int2,     		p2k_int2,		false },
@@ -74,9 +74,9 @@ struct
 	{ BYTEAOID,			k2p_bytea,			p2k_bytea,		true  },
 	{ INT2ARRAYOID,		k2p_int2array,		NULL,			true  },
 	{ INT4ARRAYOID,		k2p_int4array,		NULL,			true  },
-	{ INT8ARRAYOID,		k2p_int8array,		NULL,			true  },
+	// { INT8ARRAYOID,		k2p_int8array,		NULL,			true  },
 	{ FLOAT4ARRAYOID,	k2p_float4array, 	NULL,			true  },
-	{ FLOAT8ARRAYOID,	k2p_float8array, 	NULL,			true  }
+	// { FLOAT8ARRAYOID,	k2p_float8array, 	NULL,			true  }
 	/* ... add support for additional data types here ... */
 };
 
@@ -173,11 +173,11 @@ PGDLLEXPORT Datum getset(PG_FUNCTION_ARGS)
 		/* Convert columns from kdb+ format to Postgres format */
 		for (int i = 0; i < natts; i++)
 		{
-			dvalues[i] = 
-				(todt[todtind[i]].k2p)(
-					kK(values)[perm[i]], /* kdb+ column array */
-					funcctx->call_cntr, /* Current row to fetch */
-					kS(colnames)[perm[i]]); /* kdb+ column name (for error reporting) */
+			PGEntry entry = (todt[todtind[i]].k2p)(kK(values)[perm[i]],	   /* kdb+ column array */
+												   funcctx->call_cntr,	   /* Current row to fetch */
+												   kS(colnames)[perm[i]]); /* kdb+ column name (for error reporting) */
+			dvalues[i] = entry.dval;
+			nulls[i] = entry.isNull;
 		}
 
 		/* Create a tuple given a complete row of values */
@@ -261,14 +261,14 @@ void getset_init(FunctionCallInfo fcinfo)
 	for (int i = 0; i < natts; i++)
 	{
 		/* Find matching kdb+ column */
-		char *attname = attinmeta->tupdesc->attrs[i].attname.data;
+		char *attname = attinmeta->tupdesc->attrs[i]->attname.data;
 		int pos = findName(attname, colnames);
 		if (pos == -1)
 			elog(ERROR, "Unable to match column name \"%s\" in kdb+ table", attname);
 		perm[i] = pos;
 
 		/* Find matching data type conversion */
-		pos = findOID(attinmeta->tupdesc->attrs[i].atttypid);
+		pos = findOID(attinmeta->tupdesc->attrs[i]->atttypid);
 		if (pos == -1 || todt[pos].k2p == NULL)
 			elog(ERROR, "Extension does not support datatype in column \"%s\"", attname);
 		todtind[i] = pos;
