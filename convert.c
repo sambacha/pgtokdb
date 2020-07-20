@@ -265,7 +265,7 @@ PGEntry k2p_varchar(K c, int i, char *n)
 	} 
 	else if (c->t == KS)
 	{
-		if (ks(kS(c)[i]) == ks("")) {res.isNull = 1;} else {res.isNull = 0;}
+		if (ks(kS(c)[i])->i == ks("")->i) {res.isNull = 1;} else {res.isNull = 0;}
 		res.dval =  (Datum) cstring_to_text(kS(c)[i]);
 		return res;
 	}
