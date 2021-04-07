@@ -13,8 +13,8 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2.3.4
 
-    - name: Build project
-      run: sudo apt-get install libpq-dev
+    - name: postgresql dev
+      run: sudo apt-get install postgresql-server-dev-12  -y -qq
        
     - name: Makefile
       run: make
