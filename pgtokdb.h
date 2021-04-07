@@ -1,12 +1,12 @@
 #ifndef PGTOKDB_H
 #define PGTOKDB_H
 
-#include <postgres.h>
 #include <catalog/pg_type.h>
-#include <utils/timestamp.h>
-#include <utils/builtins.h>
-#include <utils/uuid.h>
+#include <postgres.h>
 #include <utils/array.h>
+#include <utils/builtins.h>
+#include <utils/timestamp.h>
+#include <utils/uuid.h>
 
 #define KXVER 3
 #include "k.h"
@@ -15,21 +15,19 @@
  * Redefine PG_FUNCTION_INFO_V1 (found in PG's include\fmgr.h) so that funcname
  * is declared with PGDLLEXPORT -- which is required for a Windows build.
  */
-#define PG_FUNCTION_INFO_CUSTOM(funcname) \
-extern PGDLLEXPORT Datum funcname(PG_FUNCTION_ARGS); \
-extern PGDLLEXPORT const Pg_finfo_record * CppConcat(pg_finfo_,funcname)(void); \
-const Pg_finfo_record * \
-CppConcat(pg_finfo_,funcname) (void) \
-{ \
-	static const Pg_finfo_record my_finfo = { 1 }; \
-	return &my_finfo; \
-} \
-extern int no_such_variable
+#define PG_FUNCTION_INFO_CUSTOM(funcname)                              \
+  extern PGDLLEXPORT Datum funcname(PG_FUNCTION_ARGS);                 \
+  extern PGDLLEXPORT const Pg_finfo_record *CppConcat(pg_finfo_,       \
+                                                      funcname)(void); \
+  const Pg_finfo_record *CppConcat(pg_finfo_, funcname)(void) {        \
+    static const Pg_finfo_record my_finfo = {1};                       \
+    return &my_finfo;                                                  \
+  }                                                                    \
+  extern int no_such_variable
 
-typedef struct pgentry
-{
-	Datum dval;
-	bool isNull;
+typedef struct pgentry {
+  Datum dval;
+  bool isNull;
 } PGEntry;
 
 K p2k_bool(Datum);
