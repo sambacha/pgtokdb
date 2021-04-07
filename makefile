@@ -1,4 +1,4 @@
-OS = mac
+OS = linux
 
 EXTENSION = pgtokdb			# the extensions name
 REGRESS = pgtokdb_test		# our test script file (without extension)
