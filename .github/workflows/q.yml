@@ -11,10 +11,14 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2.3.4
+      uses: actions/checkout@v2.3.4 
 
+    - uses: harmon758/postgresql-action@v1
+      with:
+        postgresql version: '12' 
+        
     - name: postgresql dev
-      run: sudo apt-get install postgresql-common postgresql-client-12  postgresql-12 libpq-dev postgresql-server-dev-12  -y -qq
+      run: sudo apt-get update && sudo apt-get install libpq-dev postgresql-server-dev-12  -y -qq
        
     - name: Makefile
       run: make
