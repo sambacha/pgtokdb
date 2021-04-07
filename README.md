@@ -1,4 +1,5 @@
 # PostgreSQL to kdb+ Extension
+
 This project is the implementation of a PostgreSQL extension that allows Postgres processes to access [kdb+](https://en.wikipedia.org/wiki/Kdb%2B) data through its SQL interface. While Postgres has excellent transactional support for reference/master data, kdb+ offers a high-performance solution to storing and analyzing extreme volumes of timeseries data. By allowing developers to combine the data from both technologies through the standard interfaces that Postgres provides, this extension may expedite the development of new solutions.
 
 The following provides a gist of how the `pgtokdb` works. The extension has an entry point (a C function) named `getset` (Set Returning Function) that handles communications between SQL and kdb+.
@@ -14,18 +15,18 @@ We have a kdb+ function defined that returns the record set. This function using
 
 ```q
 q)qfn[]
-i j  
+i j
 -----
 1 100
 2 200
 3 300
 ```
 
-Let's call that function from within Postgres. 
+Let's call that function from within Postgres.
 
 ```sql
 select * from callkdb('qfn[]');
- i |  j  
+ i |  j
 ---+-----
  1 | 100
  2 | 200
@@ -36,25 +37,25 @@ Below, we have a simple Postgres table that contains some code-description value
 
 ```sql
 select * from code;
- i |     c      
+ i |     c
 ---+------------
  1 | Compressor
  2 | Pump
  3 | Extruder
 ```
 
-Let's join the two table inside of Postgres. 
+Let's join the two table inside of Postgres.
 
 ```sql
 select B.i, A.c, B.j from code A, callkdb('qfn[]') B where A.i = B.i;
- i |     c      |  j  
+ i |     c      |  j
 ---+------------+-----
  1 | Compressor | 100
  2 | Pump       | 200
  3 | Extruder   | 300
 ```
- 
-Below is a bit more complex example. We want to invoke a kdb+ function that has an integer argument (`numrows`), and returns a table with different column types. 
+
+Below is a bit more complex example. We want to invoke a kdb+ function that has an integer argument (`numrows`), and returns a table with different column types.
 
 ```q
 fun:{[numrows]
@@ -62,7 +63,7 @@ fun:{[numrows]
     ([]
         id:numrows?1000; // Random bigints (j)
         vals:numrows?999.9; // Random floats (f)
-        ts:.z.p+1000000000*til numrows; // Array of timestamps (p), starting at now 
+        ts:.z.p+1000000000*til numrows; // Array of timestamps (p), starting at now
         str:"string" ,/: string til numrows // Just some strings (C)
         )
    }
@@ -75,7 +76,7 @@ create type callfun_t as (id bigint, vals float8, ts timestamp, str varchar);
 create function callfun(varchar, integer) returns setof callfun_t as 'pgtokdb', 'getset' language c;
 select * from callfun('fun', 10);
 
- id  |       vals       |            ts             |   str   
+ id  |       vals       |            ts             |   str
 -----+------------------+---------------------------+---------
  468 |  340.68741165963 | 2019-10-29 14:25:47.51818 | string0
  708 | 53.9956231920747 | 2019-10-29 14:25:48.51818 | string1
@@ -88,11 +89,12 @@ select * from callfun('fun', 10);
  461 | 484.424253823073 | 2019-10-29 14:25:55.51818 | string8
  924 | 682.731623685546 | 2019-10-29 14:25:56.51818 | string9
 ```
-Finally, there are many regression tests in the project [test directory](https://github.com/hughhyndman/pgtokdb/tree/master/test) that are great examples of show varying data types, arguments, results, and capabilities.  
+
+Finally, there are many regression tests in the project [test directory](https://github.com/hughhyndman/pgtokdb/tree/master/test) that are great examples of show varying data types, arguments, results, and capabilities.
 
 ## Performance
 
-Although not very scientific, the following example provides some information on the performance characteristics of the extension, as well as kdb+ and Postgres. These tests were run on my circa 2014 Macbook Pro, with an SSD drive. 
+Although not very scientific, the following example provides some information on the performance characteristics of the extension, as well as kdb+ and Postgres. These tests were run on my circa 2014 Macbook Pro, with an SSD drive.
 
 In kdb+, we create a 100 million row table with a single bigint column, containing the numbers from 0 rising monotonically upwards. The `\t` that follows the q prompt indicates that we want to time the operation.
 
@@ -104,7 +106,7 @@ q)\l kdbtbl // Load table
 `kdbtbl
 
 q)select sum j from kdbtbl // Add up all the values
-j               
+j
 ----------------
 4999999950000000
 
@@ -123,7 +125,7 @@ Let's invoke the function and have all 100 million rows returned to Postgres, fo
 
 ```sql
 postgres=# select sum(j) from foo('select j from kdbtbl');
-       sum        
+       sum
 ------------------
  4999999950000000
 Time: 24671.273 ms (00:24.671)
@@ -137,62 +139,63 @@ postgres=# select * into pgtbl from foo('select j from kdbtbl');
 Time: 151502.628 ms (02:31.503)
 
 postgres=# select sum(j) from pgtbl;
-       sum        
+       sum
 ------------------
  4999999950000000
 Time: 15614.525 ms (00:15.615)
 ```
 
-Lastly, we'll shift the processing of the sum from Postgres to kdb+, which provides a much more efficient solution. 
+Lastly, we'll shift the processing of the sum from Postgres to kdb+, which provides a much more efficient solution.
 
 ```sql
 postgres=# select j from foo('select sum j from kdbtbl');
-        j         
+        j
 ------------------
  4999999950000000
 Time: 71.102 ms
 ```
 
 ## Data Types and Conversions
+
 The table below summarizes the how the data types should be mapped between kdb+ and Postgres. The Code specifies the single character kdb+ datatype codes, which are used in the `genddl` functions in the `pgtokdb` namespace provided in the provided `pgtokdb.q` script file.
 
-kdb+ | Code | Postgres
-:-- | :-: | :-- 
-boolean | b | boolean 
-GUID | g | UUID
-short | h | smallint (int2) 
-int | i | int (integer, int4)
-long | j | bigint (int8)
-real | e | real (float4) 
-float | f | double precision (float8)
-char | c | varchar 
-symbol | s | varchar 
-timestamp | p | timestamp
-date | d | date
-char[] | C | varchar
-byte[] | X | bytea
-short[] | H | smallint[]
-int[] | I | integer[] 
-long[] | J | bigint[]
-real[] | E | real[]
-float[] | F | double precision[]
+| kdb+      | Code | Postgres                  |
+| :-------- | :--: | :------------------------ |
+| boolean   |  b   | boolean                   |
+| GUID      |  g   | UUID                      |
+| short     |  h   | smallint (int2)           |
+| int       |  i   | int (integer, int4)       |
+| long      |  j   | bigint (int8)             |
+| real      |  e   | real (float4)             |
+| float     |  f   | double precision (float8) |
+| char      |  c   | varchar                   |
+| symbol    |  s   | varchar                   |
+| timestamp |  p   | timestamp                 |
+| date      |  d   | date                      |
+| char[]    |  C   | varchar                   |
+| byte[]    |  X   | bytea                     |
+| short[]   |  H   | smallint[]                |
+| int[]     |  I   | integer[]                 |
+| long[]    |  J   | bigint[]                  |
+| real[]    |  E   | real[]                    |
+| float[]   |  F   | double precision[]        |
 
 The extension does support up-casting to data types where there won't be any data loss, for example kdb+ short to Postgres bigint. However there could be precision loss when casting integers to floats.
 
-Note that Postgres does not have a single-byte data type, so kdb+ type x should be mapped to a Postgres integer type, where it will be up-casted. 
+Note that Postgres does not have a single-byte data type, so kdb+ type x should be mapped to a Postgres integer type, where it will be up-casted.
 
 ## Installation
 
 The distribution files have to be placed into a directories that comprise the deployed Postgres installation. In order to determine which directories to use, Postgres provides a utility in its bin directory called `pg_config`. This utility prints configuration parameters of the currently installed version of PostgreSQL. There are a number of options available to `pgconfig` which return names of directories for distribution files. The table below summarizes each file in the pgtokdb distribution and the pg_config option to be used to identify their destination.
 
- File | pg_config option | Notes
- :--- | :--- | :---
- pgtokdb.so | --pkglibdir | Shared library to be used for Mac and Linux deployments
- pgtokdb.dll | --pkglibdir | DLL to be used for Windows deployments
- pgtokdb.control | --sharedir | Descriptive information for the extension
- pgtokdb.sql | --sharedir | SQL script that is run when extension is CREATED
- c.dll | | Kx Systems C-language DLL to be placed in PATH
- pgtokdb.q | | Kdb+ script placed somewhere convenient to the Q directories
+| File            | pg_config option | Notes                                                        |
+| :-------------- | :--------------- | :----------------------------------------------------------- |
+| pgtokdb.so      | --pkglibdir      | Shared library to be used for Mac and Linux deployments      |
+| pgtokdb.dll     | --pkglibdir      | DLL to be used for Windows deployments                       |
+| pgtokdb.control | --sharedir       | Descriptive information for the extension                    |
+| pgtokdb.sql     | --sharedir       | SQL script that is run when extension is CREATED             |
+| c.dll           |                  | Kx Systems C-language DLL to be placed in PATH               |
+| pgtokdb.q       |                  | Kdb+ script placed somewhere convenient to the Q directories |
 
 As an example, on my Mac, here are the names of the target directories.
 
@@ -210,13 +213,14 @@ $ psql
 postgres=# create extension pgtokdb;
 CREATE EXTENSION
 ```
+
 This command will fail if the files have not be placed in the correct directories. Also, in the case of Windows, if `c.dll` wasn't placed in the PATH.
 
 A smoke test is provided as part of the installation, which includes a few functions in the Postgres PGTOKDB schema. You will need to start q on the same host as Postgres listening on Port 5000 (this can be changed in postgres.config -- see configuration below).
 
 ```q
 q pgtokdb.q -P 5000
-q) 
+q)
 ```
 
 In another session, start psql and run the following select statement. If you get information similar to below, the extension is installed correctly.
@@ -224,32 +228,35 @@ In another session, start psql and run the following select statement. If you ge
 ```sql
 $ psql
 postgres=# select * from pgtokdb.getstatus('.pgtokdb.status[]');
- os  | version |  release   |          timenow           
+ os  | version |  release   |          timenow
 -----+---------+------------+----------------------------
  m64 |     3.6 | 2018-11-09 | 2019-11-05 00:05:30.281957
 ```
+
 ## Configuration
 
 The postgres.config file can be modified to add the following configuration settings.
 
-Setting | Description | Default
-:-- | :-- | :-- 
-pgtokdb.host | host name or IP address | localhost
-pgtokdb.port | TCP/IP port | 5000
-pgtokdb.userpass | user:pass | None provided
+| Setting          | Description             | Default       |
+| :--------------- | :---------------------- | :------------ |
+| pgtokdb.host     | host name or IP address | localhost     |
+| pgtokdb.port     | TCP/IP port             | 5000          |
+| pgtokdb.userpass | user:pass               | None provided |
 
 Note that configuration settings are read initially when a Postgres process loads the extension. To reread the settings, the process will need to restart.
 
 ## Utilities
+
 Writing wrapper Postgres function and types to specific kdb+ queries is cumbersome, so convenenient utility functions (both kdb+ and Postgres) are provided with the installation.
 
-The kdb+ utilities (`genddl` and `genddle`) are found in the installations `pgtokdb.q` script and are placed in the `.pgtokdb` namespace. 
+The kdb+ utilities (`genddl` and `genddle`) are found in the installations `pgtokdb.q` script and are placed in the `.pgtokdb` namespace.
 
 The example below uses a function (`qfn`) that takes an integer argument, and returns a kdb+ table with three columns: a long (j), float (f), and timestamp (p). We want to build the necessary Postgres function that can call this function.
 
 ```q
 q) qfn:{[n] ([] id:til n; val:n?9999.99; ts:2019.10.01D0+1D*til n)}
 ```
+
 The `genddl` function (Generate Data Definition Language), takes three arguments: the name of the Postgres function to be created, the kdb+ data type codes of the kdb+ functon arguments, and the meta of the function result.
 
 ```
@@ -279,13 +286,14 @@ We can invoke a variant of `genddl` (i.e., `genddle`) from within a psql session
 
 ```
 postgres=# select * from pgtokdb.genddl('.pgtokdb.genddle', 'call_qfn','i','metaqfn[1]');
-script                                                         
+script
 -----------------------------------------------------------------------------------------------------
 drop function if exists call_qfn;
 drop type if exists call_qfn_t;
 create type call_qfn_t as (id bigint, val float8, ts timestamp);
 create function call_qfn(varchar, integer) returns setof call_qfn_t as 'pgtokdb','getset' language c;
 ```
+
 One can write this to a text file for execution as follows.
 
 ```
@@ -296,24 +304,25 @@ postgres=# copy (select * from pgtokdb.genddl(...)) to '/tmp/f.sql';
 
 In order to build the extension, download the Postgres source from [postgres.org](https://www.postgresql.org/) and perform build and install. The Mac and Linux builds are quite straightforward using standard toolsets, however Windows required using Visual Studio and following the instructions on the Postgres site: [Building with Visual C++ or the Microsoft Windows SDK](https://www.postgresql.org/docs/12/install-windows-full.html).
 
-I built the Windows version of Postgres by using Visual Studio 2019 Community Edition, with [ActiveState Perl](https://www.activestate.com/). 
+I built the Windows version of Postgres by using Visual Studio 2019 Community Edition, with [ActiveState Perl](https://www.activestate.com/).
 
-Once you have built and installed Postgres, the `pgtokdb` extension can be built. Two makefiles are provided: `makefile` (using make) for Linux and Mac builds, and `makefile.win` (using nmake) for Windows builds. 
+Once you have built and installed Postgres, the `pgtokdb` extension can be built. Two makefiles are provided: `makefile` (using make) for Linux and Mac builds, and `makefile.win` (using nmake) for Windows builds.
 
 The makefiles have three targets: clean, all, and install. It is important to have pg_config in the path, since the Linux and Mac makefiles invoke it in order to determine necessary directories (e.g., include, libs, etc.). The Windows makefile has to be provided the value for PGROOT, which is the root directory of Postgres.
 
-* make [clean | **all** | install] [DEBUG=0 | **1**]
-* nmake -f makefile.win [clean | **all** | install] [PGROOT=dir] [DEBUG=0 | **1**]
+- make [clean | **all** | install] [DEBUG=0 | **1**]
+- nmake -f makefile.win [clean | **all** | install] [PGROOT=dir] [DEBUG=0 | **1**]
 
-The Windows build requires you to the build inside of the command shell entitled *x64 Native Tools Command Prompt for VS2019*. Furthermore, you should have clang installed, since this is the compiler used. When debugging under Windows, you can use the debugger in Visual Studio, however the pgtokdb.pdb (debug symbols) file should be moved to the same directory as pgtokdb.dll.
+The Windows build requires you to the build inside of the command shell entitled _x64 Native Tools Command Prompt for VS2019_. Furthermore, you should have clang installed, since this is the compiler used. When debugging under Windows, you can use the debugger in Visual Studio, however the pgtokdb.pdb (debug symbols) file should be moved to the same directory as pgtokdb.dll.
 
 ## Regression Tests
+
 The project has a test directory that contains a lengthy PGSQL script (and matching kdb+ script) that runs through both happy and exception paths of the extension. To run these tests, first start a local instance of kdb+ that loads its script file and listens on port 5000.
 
 ```
 $ q pgtokdb/test/pgtokdb_test.q -p 5000
 "Ready to run tests."
-q) 
+q)
 ```
 
 Then start psql and invoke its test script.
@@ -323,7 +332,7 @@ $ psql --quiet --file pgtokdb/test/pgtokdb_test.sql
 Creating test schema: pgtokdb_test
 ************** Happy Path Testing **************
 ** Test01: Simple connectivity
- j 
+ j
 ---
  0
 (1 row)
@@ -339,6 +348,7 @@ psql:dev/pgtokdb/test/pgtokdb_test.sql:xx: ERROR:  Argument 1 uses an unsupporte
 The Happy Path Testing should not produce any errors, while the Exception Path Testing should only produce those errors that are emited from the extension.
 
 ## Acknowledgements
+
 Aside from the excellent documentation on the Postgres site, there is a lot of good material written by software engineers on various technical aspects of writing Postgres extensions, as follows.
 
 [Writing PostgreSQL Extensions is Fun – C Language](https://www.percona.com/blog/2019/04/05/writing-postgresql-extensions-is-fun-c-language/)
